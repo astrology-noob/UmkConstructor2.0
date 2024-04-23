@@ -1,0 +1,335 @@
+﻿@page "/administration"
+@attribute [Authorize(Roles = "SuperUser")]
+
+@using Microsoft.AspNetCore.Authorization;
+@using Microsoft.AspNetCore.Identity;
+
+@inject UserManager<IdentityUser> _UserManager
+@inject RoleManager<IdentityRole> _RoleManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h3>Users administration</h3>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Id</th>
+            <th>User Name</th>
+            <th>Email</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var user in ColUsers)
+        {
+            <tr>
+                <td>@user.Id.Substring(0, 5) ...</td>
+                <td>@user.UserName</td>
+                <td>@user.Email</td>
+                <td>
+                    <button class="btn btn-primary"
+                            @onclick="(() => EditUser(user))">
+                        Edit
+                    </button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (ShowUserPopup)
+{
+    <div class="modal" tabindex="-1" style="display:block" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">Edit User</h3>
+
+                    <button type="button" class="close"
+                            @onclick="ClosePopup">
+                        <span aria-hidden="true">X</span>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    @if (curUser.Id != "")
+                    {
+                        <p>@curUser.Id</p>
+                        <p>@curUser.UserName</p>
+                    }
+                    else
+                    {
+                        <input class="form-control" type="text"
+                               placeholder="UserName"
+                               @bind="curUser.UserName" />
+                    }
+                    <input class="form-control" type="text"
+                           placeholder="Email"
+                           @bind="curUser.Email" />
+
+                    <input class="form-control" type="password"
+                           placeholder="Password"
+                           @bind="curUser.PasswordHash" />
+                    
+                    @foreach (string roleOption in RoleOptions)
+                    {
+                        <input type="checkbox" checked="@(chosenRoleOptions.Contains(roleOption))" 
+                        @onclick="@(()=>ToggleRoleOption(roleOption))" />@roleOption
+                    }
+
+                    <button class="btn btn-primary"
+                            @onclick="SaveUser">
+                        Save
+                    </button>
+
+                    @if (curUser.Id != "")
+                    {
+                        <button class="btn btn-danger"
+                                @onclick="DeleteUser">
+                            Delete
+                        </button>
+                    }
+                    <br />
+                    <span style="color:red">@strError</span>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (ShowRolePopup)
+{
+    <div class="modal" tabindex="-1" style="display:block" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">Edit Role</h3>
+                    <!-- Button to close the popup -->
+                    <button type="button" class="close"
+                            @onclick="ClosePopup">
+                        <span aria-hidden="true">X</span>
+                    </button>
+                </div>
+                <!-- Edit form for the current user -->
+                <div class="modal-body">
+                    <input class="form-control" type="text"
+                               placeholder="RoleName"
+                               @bind="roleName" />
+                    <br/>
+                    <!-- Button to save the user -->
+                    <button class="btn btn-primary"
+                            @onclick="SaveRole">
+                        Save
+                    </button>
+                    <span style="color:red">@strError</span>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<button class="btn btn-success" @onclick="AddNewUser">Add User</button>
+<button class="btn btn-success" @onclick="AddNewRole">Add Role</button>
+
+
+@code {
+    List<IdentityUser> ColUsers = null!;
+    IdentityUser curUser = new IdentityUser();
+    IdentityUser loggedInUser = new IdentityUser();
+
+    bool ShowUserPopup = false;
+    bool ShowRolePopup = false;
+
+    List<string> RoleOptions = null!;
+    List<string> chosenRoleOptions = [];
+
+    string strError = string.Empty;
+    string roleName = string.Empty;
+    string passwordMask = "*****";
+
+    public void GetUsers()
+    {
+        ColUsers = new List<IdentityUser>();
+
+        var users = _UserManager.Users.Select(x => new IdentityUser
+            {
+                Id = x.Id,
+                UserName = x.UserName,
+                Email = x.Email,
+                PasswordHash = passwordMask
+            });
+
+        foreach (var user in users)
+            ColUsers.Add(user);
+    }
+
+    public void ToggleRoleOption(string roleOption)
+    {
+        if (chosenRoleOptions.Contains(roleOption))
+            chosenRoleOptions.Remove(roleOption);
+        else
+            chosenRoleOptions.Add(roleOption);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        GetUsers();
+        RoleOptions = _RoleManager.Roles.Select(x => x.Name).ToList() ?? [string.Empty];
+
+        // var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        // var user = authState.User;
+
+        // foreach (var roleOption in RoleOptions)
+        // {
+        //     if (user.IsInRole(roleOption))
+        //         chosenRoleOptions.Add(roleOption);
+        // }
+    }
+
+    void AddNewUser()
+    {
+        // Make new user
+        curUser = new IdentityUser();
+        curUser.PasswordHash = passwordMask;
+        // Set Id to blank so we know it is a new record
+        curUser.Id = "";
+        // Open the Popup
+        ShowUserPopup = true;
+    }
+
+    void AddNewRole() => ShowRolePopup = true;
+
+    async Task SaveUser()
+    {
+        try
+        {
+            // if true then we edit the existing user
+            if (curUser.Id != string.Empty)
+            {
+                var user = await _UserManager.FindByIdAsync(curUser.Id);
+
+                user.Email = curUser.Email;
+                await _UserManager.UpdateAsync(user);
+
+                // Only update password if the current value
+                // is not the default value
+                if (curUser.PasswordHash != passwordMask)
+                {
+                    var resetToken = await _UserManager.GeneratePasswordResetTokenAsync(user);
+                    var passworduser = await _UserManager.ResetPasswordAsync(user, resetToken, curUser.PasswordHash);
+
+                    if (!passworduser.Succeeded)
+                    {
+                        if (passworduser.Errors.FirstOrDefault() != null)
+                            strError = passworduser.Errors.FirstOrDefault().Description;
+                        else
+                            strError = "Password error";
+                        return;
+                    }
+                }
+
+                foreach (var roleOption in RoleOptions)
+                {
+                    var UserResult = await _UserManager.IsInRoleAsync(user, roleOption);
+
+                    if (UserResult)
+                        await _UserManager.RemoveFromRoleAsync(user, roleOption);
+                    else
+                    {
+                        if (chosenRoleOptions.Contains(roleOption))
+                            await _UserManager.AddToRoleAsync(user, roleOption);
+                    }
+                }
+            }
+
+            // otherwise insert new user
+            else
+            {
+                var NewUser = new IdentityUser
+                        {
+                            UserName = curUser.UserName,
+                            Email = curUser.Email
+                        };
+
+                var CreateResult = await _UserManager.CreateAsync(NewUser, curUser.PasswordHash);
+
+                if (!CreateResult.Succeeded)
+                {
+                    if (CreateResult.Errors.FirstOrDefault() != null)
+                        strError = CreateResult.Errors.FirstOrDefault().Description;
+                    else
+                        strError = "Create error";
+
+                    return;
+                }
+                else
+                {
+                    foreach(var roleOption in chosenRoleOptions)
+                        await _UserManager.AddToRoleAsync(NewUser, roleOption);
+                }
+            }
+
+            ShowUserPopup = false;
+            GetUsers();
+        }
+        catch (Exception ex)
+        {
+            strError = ex.GetBaseException().Message;
+        }
+    }
+
+    async Task SaveRole()
+    {
+        try
+        {
+            var CreateResult = await _RoleManager.CreateAsync(new IdentityRole(roleName));
+            if (!CreateResult.Succeeded)
+            {
+                if (CreateResult.Errors.FirstOrDefault() != null)
+                    strError = CreateResult.Errors.FirstOrDefault().Description;
+                else
+                    strError = "Create error";
+
+                return;
+            }
+
+            ShowRolePopup = false;
+            GetUsers();
+        }
+        catch (Exception ex)
+        {
+            strError = ex.GetBaseException().Message;
+        }
+    }
+
+    async Task EditUser(IdentityUser _IdentityUser)
+    {
+        // Set the selected user as the current user
+        curUser = _IdentityUser;
+        var user = await _UserManager.FindByIdAsync(curUser.Id);
+
+        foreach (var roleOption in RoleOptions)
+            if (await _UserManager.IsInRoleAsync(curUser, roleOption))
+                chosenRoleOptions.Add(roleOption);
+
+        ShowUserPopup = true;
+    }
+
+    async Task DeleteUser()
+    {
+        ShowUserPopup = false;
+
+        var user = await _UserManager.FindByIdAsync(curUser.Id);
+
+        if (user != null)
+            await _UserManager.DeleteAsync(user);
+
+        GetUsers();
+    }
+
+    void ClosePopup()
+    {
+        chosenRoleOptions.Clear();
+        ShowUserPopup = false;
+        ShowRolePopup = false;
+    }
+}

@@ -1,0 +1,71 @@
+﻿@page "/curricula"
+@using UmkConstructor.Services
+@using UmkConstructor.Data.DatabaseTables
+@inject CurriculaService CS
+
+<PageTitle>Учебные планы</PageTitle>
+
+@if (curricula is null)
+{
+    <Loading />
+}
+else
+{
+    <ul>
+        @foreach (var curriculum in curricula)
+        {
+            <li>
+                <a href="curricula/@curriculum.Id">
+                    Учебный план @(curriculum.BusinessRole.Name) @(curriculum.AcademicYear.Start)-@(curriculum.AcademicYear.End)
+                </a>
+            </li>
+        }
+    </ul>
+}
+
+@if (academicYears is null || specialties is null)
+{
+    <Loading />
+}
+else
+{
+    // как добавить ссылку на конструктор?
+    <form method="post" enctype="multipart/form-data" action="OnFormSubmit">
+        <select name="specialty">
+            Выберите специальность Учебного плана
+            @foreach (var specialty in specialties) 
+            {
+                <option value="@specialty.Name">@specialty.Name</option>
+            }
+        </select>
+
+        <select name="academicYear">
+            Выберите учебный год Учебного плана
+            @foreach (var acYear in academicYears)
+            {
+                <option value="@acYear">@acYear</option>
+            }
+        </select>
+
+        <input type="file" accept=".xlsx" />Загрузить файл
+        <input type="submit" />Создать учебный план
+    </form>
+}
+
+@code {
+    private List<Specialty>? specialties;
+    private List<AcademicYear>? academicYears;
+    private List<Curriculum>? curricula;
+
+    protected override async Task OnInitializedAsync()
+    {
+        curricula = await CS.GetCurriculaFromDbAsync();
+        specialties = await CS.GetAllSpecialties();
+        academicYears = await CS.GetAllAcademicYears();
+    }
+
+    public void OnFormSubmit()
+    {
+        
+    }
+}

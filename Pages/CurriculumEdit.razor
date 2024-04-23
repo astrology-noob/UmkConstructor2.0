@@ -1,0 +1,151 @@
+﻿@page "/curricula/{CurriculaId:int}/edit"
+@attribute [Authorize(Roles = "Admin, SuperUser")]
+
+@using UmkConstructor.Data.AdditionalModels
+@using UmkConstructor.Data.DatabaseTables
+@using UmkConstructor.Services
+@using UmkConstructor.Shared.Components
+@inject CurriculaService CS
+
+@if (curriculum is null)
+{
+    <Loading />
+}
+else
+{
+    @if (curriculum.Semesters is not null)
+    {
+        @foreach (var semester in curriculum.Semesters)
+        {
+            <SemesterEditView SemesterToEdit=semester />
+        }
+    }
+    <button @onclick=AddSemester>Добавить семестр</button>
+
+    @if (popUpState)
+    {
+        @* здесь семестр создаётся с нуля, не забыть добавить возможность добавлять существующий семестр *@
+        <div class="modal" tabindex="-1" style="display:block" role="dialog">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title">Новый семестр</h3>
+
+                        <button type="button" class="close"
+                                @onclick="ClosePopup">
+                            <span aria-hidden="true">X</span>
+                        </button>
+                    </div>
+
+                    <div class="modal-body">
+
+                        <select @bind=chosenSemesterType>
+                            @foreach(var semesterType in semesterTypes)
+                            {                            
+                                <option value="@semesterType">@semesterType.Name семестр</option>
+                            }
+                        </select>
+
+                        <input type="checkbox" @bind="isAfter11thGrade"/>После 11 класса
+                        <select @bind=chosenStudyYear>
+                            @foreach (var studyYear in studyYears)
+                            {
+                                <option value="@studyYear">@studyYear.Order курс</option>
+                            }
+                        </select>
+
+                        @* может вместо number, текст? *@
+                        <input class="form-control" type="number"
+                                placeholder="Всего академических часов"
+                                @bind="newSemester.HoursTotal" />
+
+                        <input class="form-control" type="text"
+                               placeholder="Количество часов выделенных на амостоятельную работу"
+                               @bind="newSemester.IndividualWork" />
+
+                        <input class="form-control" type="text"
+                               placeholder="Количество учебных недель"
+                               @bind="newSemester.WeekCount" />
+
+                        @* проверки, что edupracticeweekcount и prodpracticeweekcount не больше weekcount *@
+                        <input class="form-control" type="text"
+                               placeholder="Количество недель на учебную практику"
+                               @bind="newSemester.EduPracticeWeekCount" />
+                        
+                        <input class="form-control" type="text"
+                               placeholder="Количество недель на производственную практику"
+                               @bind="newSemester.ProdPracticeWeekCount" />
+
+                        <input class="form-control" type="text"
+                               placeholder="Количество недель на сессию/вычитку"
+                               @bind="newSemester.SessionWeekCount" />
+
+                        <button class="btn btn-primary"
+                                @onclick="SaveSemester">
+                            Добавить
+                        </button>
+                        <br />
+                        <span style="color:red">@strError</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public int CurriculumId { get; set; }
+
+    private bool popUpState;
+
+    private FullCurriculumInfo curriculum;
+    private Semester newSemester;
+
+    private SemesterType chosenSemesterType;
+    private StudyYear chosenStudyYear;
+
+    private List<SemesterType> semesterTypes;
+    private List<StudyYear> studyYears;
+    private bool isAfter11thGrade;
+
+    private string strError;
+
+    private async Task GetStudyYears()
+    {
+        studyYears = await CS.GetStudyYears(isAfter11thGrade);
+        StateHasChanged();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        curriculum = await CS.GetFullInfoOfCurriculumById(CurriculumId);
+        newSemester = new();
+        await base.OnInitializedAsync();
+    }
+
+    private async Task SaveSemester()
+    {
+        var semesterTypeStudyYear = await CS.GetSemesterTypeStudyYearByProps(chosenSemesterType, chosenStudyYear);
+
+        try
+        {
+            await CS.AddSemesterFromForm(CurriculumId, newSemester, semesterTypeStudyYear);
+        }
+        catch (Exception ex)
+        {
+            strError = ex.Message;
+        }
+    }
+
+    private void AddSemester()
+    {
+        popUpState = true;
+    }
+
+
+    private void ClosePopup()
+    {
+        popUpState = false;
+    }
+}

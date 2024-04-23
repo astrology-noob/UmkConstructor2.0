@@ -1,0 +1,50 @@
+﻿@page "/curricula/{CurriculumId:int}"
+
+@using UmkConstructor.Data.AdditionalModels
+@using UmkConstructor.Data.DatabaseTables
+@using UmkConstructor.Services
+@using UmkConstructor.Shared.Components
+@inject CurriculaService CS
+
+<h3>Curriculum</h3>
+
+@*возможно стоит добавить и SuperUser*@
+<AuthorizeView Roles="Admin">
+    <EditButton BaseAddress="curricula" ElementId=CurriculumId />
+</AuthorizeView>
+
+@if (curriculum is null)
+{
+    <Loading />
+}
+else
+{
+    @if(curriculum.Semesters is null)
+    {
+        <AuthorizeView Roles="Professor">
+            <p>В учебном плане нет ни одного семестра</p>
+            <p>Обратитесь к методисту для добавления семестров</p>
+        </AuthorizeView>
+    }
+    else
+    {
+        @foreach (var semester in curriculum.Semesters)
+        {
+            <SemesterView Semester=semester />
+        }
+    }
+}
+
+
+@code {
+    [Parameter]
+    public int CurriculumId { get; set; }
+
+    private FullCurriculumInfo curriculum;
+
+    protected override async Task OnInitializedAsync()
+    {
+        curriculum = await CS.GetFullInfoOfCurriculumById(CurriculumId);
+        await base.OnInitializedAsync();
+    }
+}
